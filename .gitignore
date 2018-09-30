@@ -1,0 +1,5 @@
+.ghc*
+*~
+*#
+dist/
+dist-newstyle/
