@@ -26,15 +26,19 @@ library
                      FlexibleContexts
                      FlexibleInstances
                      FunctionalDependencies
+                     GeneralizedNewtypeDeriving
                      LambdaCase
                      NoImplicitPrelude
                      OverloadedLists
                      OverloadedStrings
                      ScopedTypeVariables
+                     StandaloneDeriving
                      TupleSections
                      TypeApplications
   build-depends:       base-noprelude >=4.10 && <4.12
                      , classy-prelude
+                     , lens
+                     , vector
 
 executable xndr
   main-is:             Main.hs
@@ -48,6 +52,9 @@ executable xndr
 
 test-suite xndr-tests
   main-is:             Main.hs
+  other-modules:
+                       Test.Prelude
+                       XndrTest
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   default-language:    Haskell2010
@@ -56,15 +63,18 @@ test-suite xndr-tests
                      FlexibleContexts
                      FlexibleInstances
                      FunctionalDependencies
+                     GeneralizedNewtypeDeriving
                      NoImplicitPrelude
                      OverloadedStrings
                      OverloadedLists
                      ScopedTypeVariables
+                     StandaloneDeriving
                      TypeApplications
                      TupleSections
   build-depends:       base-noprelude >=4.10 && <4.12
                      , classy-prelude
                      , xndr
+                     , lens
                      , hedgehog
                      , tasty
                      , tasty-discover
