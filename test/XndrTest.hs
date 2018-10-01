@@ -148,10 +148,12 @@ prioritizedInsert = property $ do
     $ Gen.ascii
   topicMiddle
     <- Gen.sample
+    . Gen.filter (/= topicLower)
     . Gen.text (Range.linear 0 10)
     $ Gen.ascii
   topicHigher
     <- Gen.sample
+    . Gen.filter (\x -> x /= topicLower && x /= topicMiddle)
     . Gen.filter (/= topicLower)
     . Gen.text (Range.linear 0 10)
     $ Gen.ascii

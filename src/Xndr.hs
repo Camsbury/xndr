@@ -260,11 +260,17 @@ queryTop queue = queue ^? innerQueue . ix 0
 
 mutationInsert :: Topic -> ExceptT ReducerError XndrM XndrQueue
 mutationInsert topic = do
-  queue' <- lift getQueue
-  queue <- throwEither $ reduceXndr (DoAppend topic) queue'
-  bubbleUp queue $ lastIndex queue
+  queue <- lift getQueue
+  bool (handleInsert queue) (pure queue) . elem topic . view innerQueue $ queue
   where
+    lastIndex :: XndrQueue -> Int
     lastIndex q = length (q ^. innerQueue) - 1
+
+    handleInsert :: XndrQueue -> ExceptT ReducerError XndrM XndrQueue
+    handleInsert queue = do
+      queue' <- throwEither $ reduceXndr (DoAppend topic) queue
+      bubbleUp queue' $ lastIndex queue'
+
     bubbleUp :: XndrQueue -> Int -> ExceptT ReducerError XndrM XndrQueue
     bubbleUp q n
       | n < 0 = error "Improper parent calculation in the XndrQueue"
