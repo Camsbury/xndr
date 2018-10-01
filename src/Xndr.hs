@@ -27,9 +27,6 @@ import System.Directory (doesFileExist, createDirectoryIfMissing)
 import Control.Lens
   ( ix
   , makeFieldsNoPrefix
-  , non
-  , preview
-  , to
   , view
   , _Just
   )
@@ -118,7 +115,7 @@ xndr rawCmd = do
     maybe handleNothing handleCmd . parseCmd $ rawCmd
     where
       handleNothing
-        = print . intercalate " "
+        = print . unwords
         $ "Invalid argument. Valid arguments include:" : cmdList
 
 
@@ -193,7 +190,7 @@ parseCmd
       ["describe", topic, description]
         -> Just $ Describe topic description
 
-      otherwise
+      _
         -> Nothing
 
 
@@ -210,7 +207,7 @@ cmdList =
 
 -- | Handles a successfully parsed Command
 handleCmd :: XndrCmd -> XndrM ()
-handleCmd Top = do
+handleCmd Top =
   liftIO . putStrLn =<< (maybe noTop topText . queryTop <$> getQueue)
   where
     topText x = "\"" <> x <> "\" is the most important topic in the queue."
@@ -308,8 +305,7 @@ mutationInsert topic = do
       case line of
         "y" -> pure True
         "n" -> pure False
-        _     -> do
-          getComp child parent
+        _     -> getComp child parent
 
 
 --------------------------------------------------------------------------------
@@ -330,13 +326,13 @@ reduceXndr action queue
           mXVal = queue ^? innerQueue . ix x
           mYVal = queue ^? innerQueue . ix y
         xVal <- throwMaybe (IndexOutOfRange x) mXVal
-        yVal <- throwMaybe (IndexOutOfRange x) mXVal
+        yVal <- throwMaybe (IndexOutOfRange x) mYVal
         pure $ queue &~ do
           innerQueue . ix x .= yVal
           innerQueue . ix y .= xVal
 
       -- FIXME: currentlly a noop
-      DoDescribe topic desc
+      DoDescribe _topic _desc
         -> pure queue
 
 

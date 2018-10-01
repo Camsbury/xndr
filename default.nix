@@ -1,7 +1,13 @@
-{ nixpkgs ? import <nixpkgs> {} }:
 let
-  xndrBare = nixpkgs.pkgs.haskellPackages.callCabal2nix "xndr" ./. {};
+  nixPinned = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/18.09-beta.tar.gz";
+    sha256 = "147xyn8brvkfgz1z3jbk13w00h6camnf6z0bz0r21g9pn1vv7sb0";
+  }) {};
 in
-  nixpkgs.haskell.lib.overrideCabal xndrBare ( oldAttrs: {
-    librarySystemDepends = with nixpkgs.pkgs; [cabal-install ghc];
-  })
+  { nixpkgs ? nixPinned }:
+    let
+      xndrBare = nixpkgs.pkgs.haskellPackages.callCabal2nix "xndr" ./. {};
+    in
+      nixpkgs.haskell.lib.overrideCabal xndrBare ( oldAttrs: {
+        librarySystemDepends = with nixpkgs.pkgs; [cabal-install ghc];
+      })
