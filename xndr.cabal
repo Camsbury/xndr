@@ -31,13 +31,17 @@ library
                      NoImplicitPrelude
                      OverloadedLists
                      OverloadedStrings
+                     RecordWildCards
                      ScopedTypeVariables
                      StandaloneDeriving
                      TupleSections
                      TypeApplications
   build-depends:       base-noprelude >=4.10 && <4.12
                      , classy-prelude
+                     , directory
                      , lens
+                     , mtl
+                     , store
                      , vector
 
 executable xndr
@@ -54,6 +58,7 @@ test-suite xndr-tests
   main-is:             Main.hs
   other-modules:
                        Test.Prelude
+                       Test.Support
                        XndrTest
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
@@ -67,6 +72,7 @@ test-suite xndr-tests
                      NoImplicitPrelude
                      OverloadedStrings
                      OverloadedLists
+                     RecordWildCards
                      ScopedTypeVariables
                      StandaloneDeriving
                      TypeApplications
@@ -74,8 +80,11 @@ test-suite xndr-tests
   build-depends:       base-noprelude >=4.10 && <4.12
                      , classy-prelude
                      , xndr
-                     , lens
+                     , directory
                      , hedgehog
+                     , lens
+                     , mtl
+                     , store
                      , tasty
                      , tasty-discover
                      , tasty-hedgehog
