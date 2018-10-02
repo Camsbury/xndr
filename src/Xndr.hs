@@ -21,6 +21,7 @@ import Control.Lens.Operators
 import Control.Monad.Except
 --------------------------------------------------------------------------------
 import Data.Store (Store, encode, decode)
+import Data.Vector (elemIndex)
 import System.Environment (lookupEnv)
 import System.Directory (doesFileExist, createDirectoryIfMissing)
 --------------------------------------------------------------------------------
@@ -28,7 +29,6 @@ import Control.Lens
   ( ix
   , makeFieldsNoPrefix
   , view
-  , _Just
   )
 --------------------------------------------------------------------------------
 -- Types
@@ -51,6 +51,7 @@ type Topic = Text
 data XndrCmd
   = Top
   | Pop
+  | Delete Topic
   | Insert Topic
   | Info Topic
   | Describe Topic Text
@@ -60,6 +61,7 @@ data XndrCmd
 data CmdTag
   = TopTag
   | PopTag
+  | DeleteTag
   | InsertTag
   | InfoTag
   | DescribeTag
@@ -73,8 +75,9 @@ data XndrAction
   | DoDescribe Topic Text
   deriving stock (Eq, Show)
 
-newtype ReducerError
+data ReducerError
   = IndexOutOfRange Int
+  | TopicNotInQueue Topic
   deriving stock (Eq, Show)
 
 data Env
@@ -82,7 +85,7 @@ data Env
   { _queueFileName :: String
   , _queueDir      :: FilePath
   , _queueRef      :: IORef XndrQueue
-  , _compTable     :: Maybe (HashMap Topic (HashMap Topic Bool))
+  , _compFn     :: Maybe (Topic -> Topic -> Bool)
   }
 makeFieldsNoPrefix ''Env
 
@@ -109,7 +112,7 @@ xndr rawCmd = do
   let
     _queueDir = homeDir <> "/.xndr/"
     _queueFileName = "default"
-    _compTable = mempty
+    _compFn = Nothing
   (`runReaderT` Env{..}) $ do
     readQueueFile
     maybe handleNothing handleCmd . parseCmd $ rawCmd
@@ -181,6 +184,9 @@ parseCmd
       ["pop"]
         -> Just Pop
 
+      ["delete", topic]
+        -> Just $ Delete topic
+
       ["insert", topic]
         -> Just $ Insert topic
 
@@ -199,6 +205,7 @@ cmdList :: [Text]
 cmdList =
   [ "top"
   , "pop"
+  , "delete"
   , "insert"
   , "info"
   , "describe"
@@ -222,6 +229,21 @@ handleCmd (Insert topic)
       writeQueue queue
       writeQueueFile
       putStrLn $ "\"" <> topic <> "\" inserted successfully."
+
+    putError :: ReducerError -> XndrM ()
+    putError err
+      = putStrLn
+      $ "Error encountered while inserting: " <> tshow err
+
+handleCmd (Delete topic)
+  =   either putError handleSuccess
+  =<< runExceptT (mutationDelete topic)
+  where
+    handleSuccess :: XndrQueue -> XndrM ()
+    handleSuccess queue = do
+      writeQueue queue
+      writeQueueFile
+      putStrLn $ "\"" <> topic <> "\" deleted successfully."
 
     putError :: ReducerError -> XndrM ()
     putError err
@@ -258,6 +280,58 @@ queryTop queue = queue ^? innerQueue . ix 0
 --------------------------------------------------------------------------------
 -- Mutations
 
+mutationDelete :: Topic -> ExceptT ReducerError XndrM XndrQueue
+mutationDelete topic = do
+  queue <- lift getQueue
+  let
+    lastIdx = length (queue ^. innerQueue) - 1
+    mIndex = elemIndex topic $ queue ^. innerQueue
+  idx <- throwMaybe (TopicNotInQueue topic) mIndex
+  bubbleDown idx
+    <=< throwEither
+    $   reduceXndr DoPopTail
+    <=< reduceXndr (DoSwap idx lastIdx)
+    $   queue
+  where
+    bubbleDown :: Int -> XndrQueue -> ExceptT ReducerError XndrM XndrQueue
+    bubbleDown idx queue = do
+      let
+        rightChildIdx   = getRightChild idx
+        leftChildIdx    = getLeftChild  idx
+        -- FIXME: Again, problematic if this ever isn't true
+        parent     = queue ^?! innerQueue . ix idx
+        maybeRightChild = queue ^? innerQueue . ix rightChildIdx
+        maybeLeftChild  = queue ^? innerQueue . ix leftChildIdx
+      case (maybeLeftChild, maybeRightChild) of
+        (Nothing, Nothing)
+          -> pure queue
+        (Nothing, Just rChild)
+          -> bool (pure queue) (continueBubble idx rightChildIdx queue)
+          =<< compareNodes rChild parent
+        (Just lChild, Nothing)
+          -> bool (pure queue) (continueBubble idx leftChildIdx queue)
+          =<< compareNodes lChild parent
+        (Just lChild, Just rChild) -> do
+          lrComp <- compareNodes lChild rChild
+          lComp <- compareNodes lChild parent
+          rComp <- compareNodes rChild parent
+          if lrComp && lComp then
+            continueBubble idx leftChildIdx queue
+          else if rComp then
+            continueBubble idx rightChildIdx queue
+          else
+            pure queue
+
+    continueBubble
+      :: Int
+      -> Int
+      -> XndrQueue
+      -> ExceptT ReducerError XndrM XndrQueue
+    continueBubble parentIdx childIdx queue = do
+      queue' <- throwEither $ reduceXndr (DoSwap parentIdx childIdx) queue
+      bubbleDown childIdx queue'
+
+
 mutationInsert :: Topic -> ExceptT ReducerError XndrM XndrQueue
 mutationInsert topic = do
   queue <- lift getQueue
@@ -276,15 +350,13 @@ mutationInsert topic = do
       | n < 0 = error "Improper parent calculation in the XndrQueue"
       | n == 0 = pure q
       | otherwise = do
-          cTable <- lift $ view compTable
           let
             parent = getParent n
             -- FIXME: These vals will error if everything is horribly wrong
             -- should property test
             nVal      = q ^?! innerQueue . ix n
             parentVal = q ^?! innerQueue . ix parent
-            maybeComp = cTable ^? _Just . ix nVal . ix parentVal
-          comp <- maybe (getComp nVal parentVal) pure maybeComp
+          comp <- compareNodes nVal parentVal
           bool (pure q) (continueBubble n parent q) comp
 
     continueBubble
@@ -294,24 +366,6 @@ mutationInsert topic = do
       -> ExceptT ReducerError XndrM XndrQueue
     continueBubble n parent q
       = (`bubbleUp` parent) =<< throwEither (reduceXndr (DoSwap n parent) q)
-
-    getComp
-      :: Topic
-      -> Topic
-      -> ExceptT ReducerError XndrM Bool
-    getComp child parent = do
-      liftIO
-        . putStrLn
-        $ "Is \""
-        <> child
-        <> "\" more important than \""
-        <> parent
-        <> "\"? (y/n)"
-      line <- getLine
-      case line of
-        "y" -> pure True
-        "n" -> pure False
-        _     -> getComp child parent
 
 
 --------------------------------------------------------------------------------
@@ -349,3 +403,36 @@ getParent :: Int -> Int
 getParent n
   | n > 0     = div (n - 1) 2
   | otherwise = 0
+
+getLeftChild :: Int -> Int
+getLeftChild n
+  | n < 0     = 0
+  | otherwise = 2*n + 1
+
+getRightChild :: Int -> Int
+getRightChild n
+  | n < 0     = 0
+  | otherwise = 2*n + 2
+
+compareNodes :: Topic -> Topic -> ExceptT ReducerError XndrM Bool
+compareNodes nVal parentVal = do
+  mCompFn <- lift $ view compFn
+  maybe (getComp nVal parentVal) (\f -> pure $ f nVal parentVal) mCompFn
+  where
+    getComp
+      :: Topic
+      -> Topic
+      -> ExceptT ReducerError XndrM Bool
+    getComp child parent = do
+      liftIO
+        . putStrLn
+        $ "Is \""
+        <> child
+        <> "\" more important than \""
+        <> parent
+        <> "\"? (y/n)"
+      line <- getLine
+      case line of
+        "y" -> pure True
+        "n" -> pure False
+        _   -> getComp child parent

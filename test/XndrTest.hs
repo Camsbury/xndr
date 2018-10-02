@@ -8,7 +8,7 @@ import Xndr
 --------------------------------------------------------------------------------
 import Control.Lens.Operators
 --------------------------------------------------------------------------------
-import Control.Lens (ix)
+import Control.Lens (ix, non)
 import System.Directory (removeFile)
 --------------------------------------------------------------------------------
 import qualified Hedgehog.Gen   as Gen
@@ -24,6 +24,7 @@ main
     , test_xndrInsert
     , test_readWrite
     , test_prioritizeInsert
+    , test_prioritizeDelete
     ]
 
 --------------------------------------------------------------------------------
@@ -101,8 +102,8 @@ roundTripReadWrite = property $ do
       = mkTestFileName testState
     _queueDir
       = "/tmp/"
-    _compTable
-      = mempty
+    _compFn
+      = Nothing
   _queueRef <- newIORef mempty
 
   -- Starts off empty
@@ -163,11 +164,15 @@ prioritizedInsert = property $ do
       = mkTestFileName testState
     _queueDir
       = "/tmp/"
-    _compTable
-      = Just $ mapFromList
-        [ (topicMiddle, mapFromList [(topicHigher, False)])
-        , (topicHigher, mapFromList [(topicLower, True)])
-        ]
+    compFn nVal pVal
+      | nVal == topicHigher && pVal == topicLower = True
+      | nVal == topicHigher && pVal == topicMiddle = True
+      | nVal == topicMiddle && pVal == topicHigher = False
+      | nVal == topicMiddle && pVal == topicLower = True
+      | nVal == topicLower && pVal == topicHigher = False
+      | nVal == topicLower && pVal == topicMiddle = False
+      | otherwise = False
+    _compFn = Just compFn
   _queueRef <- newIORef mempty
 
   topTopic <- liftIO . (`runReaderT` Env{..}) $ do
@@ -181,3 +186,65 @@ prioritizedInsert = property $ do
   liftIO $ removeFile (_queueDir <> _queueFileName)
 
   topTopic === Just topicHigher
+
+
+--------------------------------------------------------------------------------
+-- Delete Prioritization
+
+test_prioritizeDelete :: TestTree
+test_prioritizeDelete
+  = testGroup "Delete"
+  [ testProperty "should prioritize properly" prioritizedDelete
+  ]
+
+prioritizedDelete :: Property
+prioritizedDelete = property $ do
+  testState <- newTestState
+
+  topicLower
+    <- Gen.sample
+    . Gen.text (Range.linear 0 10)
+    $ Gen.ascii
+  topicMiddle
+    <- Gen.sample
+    . Gen.filter (/= topicLower)
+    . Gen.text (Range.linear 0 10)
+    $ Gen.ascii
+  topicHigher
+    <- Gen.sample
+    . Gen.filter (/= topicMiddle)
+    . Gen.filter (/= topicLower)
+    . Gen.text (Range.linear 0 10)
+    $ Gen.ascii
+
+  let
+    _queueFileName
+      = mkTestFileName testState
+    _queueDir
+      = "/tmp/"
+    compFn nVal pVal
+      | nVal == topicHigher && pVal == topicLower = True
+      | nVal == topicHigher && pVal == topicMiddle = True
+      | nVal == topicMiddle && pVal == topicHigher = False
+      | nVal == topicMiddle && pVal == topicLower = True
+      | nVal == topicLower  && pVal == topicHigher = False
+      | nVal == topicLower  && pVal == topicMiddle = False
+      | otherwise = False
+    _compFn = Just compFn
+  _queueRef
+    <- newIORef
+    $ XndrQueue
+    [ topicHigher
+    , topicMiddle
+    , topicLower
+    ]
+
+  topTopic <- liftIO . (`runReaderT` Env{..}) $ do
+    queue <- getQueue
+    handleCmd (Delete topicHigher)
+
+    queryTop <$> getQueue
+
+  liftIO $ removeFile (_queueDir <> _queueFileName)
+
+  topTopic === Just topicMiddle

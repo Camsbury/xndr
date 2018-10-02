@@ -10,6 +10,7 @@ import Test.Prelude
 import System.IO.Unsafe (unsafePerformIO)
 
 testState :: MVar Int
+{-# NOINLINE testState #-}
 testState = unsafePerformIO $ newMVar 0
 
 newTestState :: MonadIO m => m Int
