@@ -21,6 +21,7 @@ main
   . localOption (HedgehogTestLimit $ Just 5)
   $ testGroup "xndr commands"
     [ test_xndrTop
+    , test_xndrTop
     , test_xndrInsert
     , test_readWrite
     , test_prioritizeInsert
@@ -65,6 +66,25 @@ twoMemberQueueTopResponse = property $ do
     . Gen.text (Range.linear 0 10)
     $ Gen.ascii
   queryTop (XndrQueue [topicHigher, topicLower]) === Just topicHigher
+
+
+--------------------------------------------------------------------------------
+--List
+
+test_xndrList :: TestTree
+test_xndrList
+  = testGroup "list command"
+    [testProperty "returns the same queue as was given" listResponse]
+
+listResponse :: Property
+listResponse = property $ do
+  topicList
+    <- Gen.sample
+    . Gen.list (Range.linear 0 10)
+    . Gen.text (Range.linear 0 10)
+    $ Gen.ascii
+
+  queryList (XndrQueue $ fromList topicList) === topicList
 
 
 --------------------------------------------------------------------------------

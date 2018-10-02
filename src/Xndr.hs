@@ -29,6 +29,7 @@ import Control.Lens
   ( ix
   , makeFieldsNoPrefix
   , view
+  , folded
   )
 --------------------------------------------------------------------------------
 -- Types
@@ -51,6 +52,7 @@ type Topic = Text
 data XndrCmd
   = Top
   | Pop
+  | List
   | Delete Topic
   | Insert Topic
   | Info Topic
@@ -61,6 +63,7 @@ data XndrCmd
 data CmdTag
   = TopTag
   | PopTag
+  | ListTag
   | DeleteTag
   | InsertTag
   | InfoTag
@@ -184,6 +187,9 @@ parseCmd
       ["pop"]
         -> Just Pop
 
+      ["list"]
+        -> Just List
+
       ["delete", topic]
         -> Just $ Delete topic
 
@@ -205,6 +211,7 @@ cmdList :: [Text]
 cmdList =
   [ "top"
   , "pop"
+  , "list"
   , "delete"
   , "insert"
   , "info"
@@ -221,6 +228,9 @@ handleCmd Top
     printTop x
       = putStrLn
       $ "\"" <> x <> "\" is the highest priority topic in the queue."
+
+handleCmd List
+  = traverse_ putStrLn . queryList =<< getQueue
 
 handleCmd Pop = do
   queue <- getQueue
@@ -270,6 +280,9 @@ handleMutation action topic mutation
 
 queryTop :: XndrQueue -> Maybe Topic
 queryTop queue = queue ^? innerQueue . ix 0
+
+queryList :: XndrQueue -> [Topic]
+queryList queue = queue ^.. innerQueue . folded
 
 
 --------------------------------------------------------------------------------
