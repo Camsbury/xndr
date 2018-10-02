@@ -313,14 +313,22 @@ mutationDelete topic = do
           =<< compareNodes lChild parent
         (Just lChild, Just rChild) -> do
           lrComp <- compareNodes lChild rChild
-          lComp <- compareNodes lChild parent
-          rComp <- compareNodes rChild parent
-          if lrComp && lComp then
-            continueBubble idx leftChildIdx queue
-          else if rComp then
-            continueBubble idx rightChildIdx queue
-          else
-            pure queue
+          if lrComp then do
+            lComp <- compareNodes lChild parent
+            if lComp then
+              continueBubble idx leftChildIdx queue
+            else do
+              rComp <- compareNodes rChild parent
+              if rComp then
+                continueBubble idx rightChildIdx queue
+              else
+                pure queue
+          else do
+            rComp <- compareNodes rChild parent
+            if rComp then
+              continueBubble idx rightChildIdx queue
+            else
+              pure queue
 
     continueBubble
       :: Int
