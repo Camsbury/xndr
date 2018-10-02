@@ -25,6 +25,7 @@ main
     , test_readWrite
     , test_prioritizeInsert
     , test_prioritizeDelete
+    , test_prioritizePop
     ]
 
 --------------------------------------------------------------------------------
@@ -180,7 +181,6 @@ prioritizedInsert = property $ do
     handleCmd (Insert topicLower)
     handleCmd (Insert topicHigher)
     handleCmd (Insert topicMiddle)
-
     queryTop <$> getQueue
 
   liftIO $ removeFile (_queueDir <> _queueFileName)
@@ -242,7 +242,67 @@ prioritizedDelete = property $ do
   topTopic <- liftIO . (`runReaderT` Env{..}) $ do
     queue <- getQueue
     handleCmd (Delete topicHigher)
+    queryTop <$> getQueue
 
+  liftIO $ removeFile (_queueDir <> _queueFileName)
+
+  topTopic === Just topicMiddle
+
+
+--------------------------------------------------------------------------------
+-- Pop Prioritization
+
+test_prioritizePop :: TestTree
+test_prioritizePop
+  = testGroup "Pop"
+  [ testProperty "should prioritize properly" prioritizedPop
+  ]
+
+prioritizedPop :: Property
+prioritizedPop = property $ do
+  testState <- newTestState
+
+  topicLower
+    <- Gen.sample
+    . Gen.text (Range.linear 0 10)
+    $ Gen.ascii
+  topicMiddle
+    <- Gen.sample
+    . Gen.filter (/= topicLower)
+    . Gen.text (Range.linear 0 10)
+    $ Gen.ascii
+  topicHigher
+    <- Gen.sample
+    . Gen.filter (/= topicMiddle)
+    . Gen.filter (/= topicLower)
+    . Gen.text (Range.linear 0 10)
+    $ Gen.ascii
+
+  let
+    _queueFileName
+      = mkTestFileName testState
+    _queueDir
+      = "/tmp/"
+    compFn nVal pVal
+      | nVal == topicHigher && pVal == topicLower = True
+      | nVal == topicHigher && pVal == topicMiddle = True
+      | nVal == topicMiddle && pVal == topicHigher = False
+      | nVal == topicMiddle && pVal == topicLower = True
+      | nVal == topicLower  && pVal == topicHigher = False
+      | nVal == topicLower  && pVal == topicMiddle = False
+      | otherwise = False
+    _compFn = Just compFn
+  _queueRef
+    <- newIORef
+    $ XndrQueue
+    [ topicHigher
+    , topicMiddle
+    , topicLower
+    ]
+
+  topTopic <- liftIO . (`runReaderT` Env{..}) $ do
+    queue <- getQueue
+    handleCmd Pop
     queryTop <$> getQueue
 
   liftIO $ removeFile (_queueDir <> _queueFileName)

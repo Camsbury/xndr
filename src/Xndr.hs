@@ -214,60 +214,55 @@ cmdList =
 
 -- | Handles a successfully parsed Command
 handleCmd :: XndrCmd -> XndrM ()
-handleCmd Top =
-  liftIO . putStrLn =<< (maybe noTop topText . queryTop <$> getQueue)
+handleCmd Top
+  = maybe emptyQueueMsg printTop . queryTop =<< getQueue
   where
-    topText x = "\"" <> x <> "\" is the most important topic in the queue."
-    noTop     = "Nothing in the queue!"
+    printTop :: Text -> XndrM ()
+    printTop x
+      = putStrLn
+      $ "\"" <> x <> "\" is the highest priority topic in the queue."
+
+handleCmd Pop = do
+  queue <- getQueue
+  maybe emptyQueueMsg handlePop $ queryTop queue
+  where
+    handlePop :: Topic -> XndrM ()
+    handlePop topic
+      = handleMutation "pop" topic mutationDelete
 
 handleCmd (Insert topic)
-  =   either putError handleSuccess
-  =<< runExceptT (mutationInsert topic)
-  where
-    handleSuccess :: XndrQueue -> XndrM ()
-    handleSuccess queue = do
-      writeQueue queue
-      writeQueueFile
-      putStrLn $ "\"" <> topic <> "\" inserted successfully."
-
-    putError :: ReducerError -> XndrM ()
-    putError err
-      = putStrLn
-      $ "Error encountered while inserting: " <> tshow err
+  = handleMutation "insert" topic mutationInsert
 
 handleCmd (Delete topic)
-  =   either putError handleSuccess
-  =<< runExceptT (mutationDelete topic)
-  where
-    handleSuccess :: XndrQueue -> XndrM ()
-    handleSuccess queue = do
-      writeQueue queue
-      writeQueueFile
-      putStrLn $ "\"" <> topic <> "\" deleted successfully."
-
-    putError :: ReducerError -> XndrM ()
-    putError err
-      = putStrLn
-      $ "Error encountered while inserting: " <> tshow err
+  = handleMutation "delete" topic mutationDelete
 
 handleCmd _ = liftIO $ putStrLn "This action isn't handled yet!"
 
 
--- -- | The response function for each command
--- xndrResponse :: XndrQueue -> XndrCmd -> Text
--- xndrResponse queue
---   = \case
---       Pop
---         -> "Popped \"topic1\" from the queue."
+-- | Message indicating the queue is empty
+emptyQueueMsg :: XndrM ()
+emptyQueueMsg = liftIO $ putStrLn "Nothing in the queue!"
 
---       Insert topic
---         -> "\"" <> topic <> "\" was inserted into the queue."
+-- | Generic mutation handler for a topic given an action
+handleMutation
+  :: Text
+  -> Topic
+  -> (Topic -> ExceptT ReducerError XndrM XndrQueue)
+  -> XndrM ()
+handleMutation action topic mutation
+  = either printError onCmdSuccess
+  =<< runExceptT (mutation topic)
+  where
+    onCmdSuccess :: XndrQueue -> XndrM ()
+    onCmdSuccess queue = do
+      writeQueue queue
+      writeQueueFile
+      putStrLn $ "\"" <> topic <> "\" " <> action <> " successful."
 
---       Info topic
---         -> "\"" <> topic <> "\": descriptions of the topic go here!"
-
---       Describe topic description
---         -> "\"" <> topic <> "\" description added"
+    printError :: ReducerError -> XndrM ()
+    printError err
+      = putStrLn
+      $ "Error encountered while attempting to " <> action <> ": " <> tshow err
 
 
 --------------------------------------------------------------------------------
