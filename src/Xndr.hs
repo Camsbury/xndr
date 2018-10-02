@@ -444,7 +444,7 @@ compareNodes nVal parentVal = do
         . putStrLn
         $ "Is \""
         <> child
-        <> "\" more important than \""
+        <> "\" higher priority than \""
         <> parent
         <> "\"? (y/n)"
       line <- getLine
