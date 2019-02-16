@@ -52,6 +52,7 @@ executable xndr
   default-language:    Haskell2010
   build-depends:       base-noprelude >=4.10 && <4.12
                      , classy-prelude
+                     , optparse-applicative
                      , xndr
 
 test-suite xndr-tests
