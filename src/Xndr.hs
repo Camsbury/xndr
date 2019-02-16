@@ -19,6 +19,7 @@ import Prelude
 --------------------------------------------------------------------------------
 import Control.Lens.Operators
 import Control.Monad.Except
+import Control.Monad.State
 --------------------------------------------------------------------------------
 import Data.Store (Store, encode, decode)
 import Data.Vector (elemIndex)
@@ -72,6 +73,7 @@ data ReducerError
   | TopicNotInQueue Topic
   deriving stock (Eq, Show)
 
+-- | The Env that pure functions pull from
 data Env
   = Env
   { _queueFileName :: String
@@ -81,6 +83,7 @@ data Env
   }
 makeFieldsNoPrefix ''Env
 
+-- | The file path for the XndrQueue
 queuePath
   :: ( HasQueueFileName env String
     , HasQueueDir env FilePath
@@ -89,7 +92,7 @@ queuePath
   => m FilePath
 queuePath = (<>) <$> view queueDir <*> view queueFileName
 
-
+-- | App Monad for Xndr
 type XndrM = ReaderT Env IO
 
 
@@ -178,7 +181,7 @@ handleCmd Top
       $ "\"" <> x <> "\" is the highest priority topic in the queue."
 
 handleCmd List
-  = traverse_ putStrLn . queryList =<< getQueue
+  = traverse_ putStrLn . createDisplayTree . queryList =<< getQueue
 
 handleCmd Pop = do
   queue <- getQueue
@@ -399,3 +402,17 @@ compareNodes nVal parentVal = do
         "y" -> pure True
         "n" -> pure False
         _   -> getComp child parent
+
+-- | Make the text to display for a tree view
+createDisplayTree :: [Topic] -> [Text]
+createDisplayTree = reverse . flip execState mempty . doCreate 0 ""
+  where
+    doCreate :: Int -> Text -> [Text] -> State [Text] ()
+    doCreate idx spacer topics
+      = maybe (pure ()) processTopic
+      $ topics ^? ix idx
+      where
+        processTopic topic = do
+          modify (spacer <> topic :)
+          doCreate (getLeftChild idx) ("-" <> spacer) topics
+          doCreate (getRightChild idx) ("-" <> spacer) topics
