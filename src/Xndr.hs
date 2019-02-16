@@ -2,8 +2,8 @@
 --------------------------------------------------------------------------------
 -- |
 -- Module: Xndr
--- Description: The main loop for xndr.
--- Maintainers: Cameron Kingsbury <cameron@urbint.com>
+-- Description: The API for Xndr's queue.
+-- Maintainers: Cameron Kingsbury <camsbury7@gmail.com>
 -- Maturity: Draft
 --
 --
@@ -33,7 +33,6 @@ import Control.Lens
   )
 --------------------------------------------------------------------------------
 -- Types
--- TODO: clean these up to be derived from 'CmdTag'
 
 -- | Beginning representation of the Xndr priority queue
 newtype XndrQueue
@@ -59,17 +58,6 @@ data XndrCmd
   | Describe Topic Text
   deriving stock (Eq, Show)
 
--- | Sum type of command names
-data CmdTag
-  = TopTag
-  | PopTag
-  | ListTag
-  | DeleteTag
-  | InsertTag
-  | InfoTag
-  | DescribeTag
-  deriving stock (Eq, Show, Ord, Bounded)
-
 -- | Sum type of the reducer's actions
 data XndrAction
   = DoSwap Int Int
@@ -78,6 +66,7 @@ data XndrAction
   | DoDescribe Topic Text
   deriving stock (Eq, Show)
 
+-- | Sum type of the reducer's errors
 data ReducerError
   = IndexOutOfRange Int
   | TopicNotInQueue Topic
@@ -88,7 +77,7 @@ data Env
   { _queueFileName :: String
   , _queueDir      :: FilePath
   , _queueRef      :: IORef XndrQueue
-  , _compFn     :: Maybe (Topic -> Topic -> Bool)
+  , _compFn        :: Maybe (Topic -> Topic -> Bool)
   }
 makeFieldsNoPrefix ''Env
 
@@ -107,26 +96,27 @@ type XndrM = ReaderT Env IO
 --------------------------------------------------------------------------------
 -- Main function
 
--- | Takes commmand line arguments, and performs the corresponding xndr action.
-xndr :: [Text] -> IO ()
-xndr rawCmd = do
+-- | Performs the commands given in XndrCmd!
+xndr :: XndrCmd -> IO ()
+xndr cmd = do
+  -- Create the Environmment
   homeDir <- fromMaybe "/tmp" <$> lookupEnv "HOME"
   _queueRef <- newIORef mempty
   let
     _queueDir = homeDir <> "/.xndr/"
     _queueFileName = "default"
     _compFn = Nothing
+
+  -- Run in the Environment
   (`runReaderT` Env{..}) $ do
+    -- Read the `XndrQueue` from the File System
     readQueueFile
-    maybe handleNothing handleCmd . parseCmd $ rawCmd
-    where
-      handleNothing
-        = print . unwords
-        $ "Invalid argument. Valid arguments include:" : cmdList
+    -- Handle the `XndrCmd`
+    handleCmd cmd
 
 
 --------------------------------------------------------------------------------
--- File Management
+-- Queue File Management
 
 -- | Get the queue from the environment
 readQueueFile :: XndrM ()
@@ -177,49 +167,7 @@ emptyQueue = writeQueue mempty
 --------------------------------------------------------------------------------
 -- Command Execution
 
--- | Parses a textual command into a 'XndrCmd'
-parseCmd :: [Text] -> Maybe XndrCmd
-parseCmd
-  = \case
-      ["top"]
-        -> Just Top
-
-      ["pop"]
-        -> Just Pop
-
-      ["list"]
-        -> Just List
-
-      ["delete", topic]
-        -> Just $ Delete topic
-
-      ["insert", topic]
-        -> Just $ Insert topic
-
-      ["info", topic]
-        -> Just $ Info topic
-
-      ["describe", topic, description]
-        -> Just $ Describe topic description
-
-      _
-        -> Nothing
-
-
--- | Possible commands for xndr
-cmdList :: [Text]
-cmdList =
-  [ "top"
-  , "pop"
-  , "list"
-  , "delete"
-  , "insert"
-  , "info"
-  , "describe"
-  ]
-
-
--- | Handles a successfully parsed Command
+-- | Dispatches a `XndrCmd`
 handleCmd :: XndrCmd -> XndrM ()
 handleCmd Top
   = maybe emptyQueueMsg printTop . queryTop =<< getQueue
@@ -247,11 +195,6 @@ handleCmd (Delete topic)
   = handleMutation "delete" topic mutationDelete
 
 handleCmd _ = liftIO $ putStrLn "This action isn't handled yet!"
-
-
--- | Message indicating the queue is empty
-emptyQueueMsg :: XndrM ()
-emptyQueueMsg = liftIO $ putStrLn "Nothing in the queue!"
 
 -- | Generic mutation handler for a topic given an action
 handleMutation
@@ -414,6 +357,10 @@ reduceXndr action queue
 
 --------------------------------------------------------------------------------
 -- Utility
+
+-- | Message indicating the queue is empty
+emptyQueueMsg :: XndrM ()
+emptyQueueMsg = liftIO $ putStrLn "Nothing in the queue!"
 
 getParent :: Int -> Int
 getParent n
