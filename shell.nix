@@ -1,8 +1,15 @@
 let
-  nixPinned = import (builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/18.09-beta.tar.gz";
-    sha256 = "147xyn8brvkfgz1z3jbk13w00h6camnf6z0bz0r21g9pn1vv7sb0";
-  }) {};
+  nixPinned = import (builtins.fetchTarball  "https://github.com/NixOS/nixpkgs/archive/fa82ebccf66.tar.gz") {};
 in
   { nixpkgs ? nixPinned }:
-    (import ./default.nix { inherit nixpkgs; }).env
+    let
+      xndr = (import ./default.nix { inherit nixpkgs; });
+      xndrShell = with nixpkgs;
+      haskell.lib.overrideCabal xndr (oldAttrs: {
+        librarySystemDepends = with pkgs; [
+          cabal-install
+          haskellPackages.ghcid
+        ];
+      });
+    in
+      xndrShell.env

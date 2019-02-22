@@ -36,7 +36,7 @@ library
                      StandaloneDeriving
                      TupleSections
                      TypeApplications
-  build-depends:       base-noprelude >=4.10 && <4.12
+  build-depends:       base-noprelude >=4.11
                      , classy-prelude
                      , directory
                      , lens
@@ -50,7 +50,7 @@ executable xndr
   -- other-extensions:
   hs-source-dirs:      app
   default-language:    Haskell2010
-  build-depends:       base-noprelude >=4.10 && <4.12
+  build-depends:       base-noprelude >=4.11
                      , classy-prelude
                      , optparse-applicative
                      , xndr
@@ -78,7 +78,7 @@ test-suite xndr-tests
                      StandaloneDeriving
                      TypeApplications
                      TupleSections
-  build-depends:       base-noprelude >=4.10 && <4.12
+  build-depends:       base-noprelude >=4.11
                      , classy-prelude
                      , xndr
                      , directory
