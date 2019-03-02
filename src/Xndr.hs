@@ -59,6 +59,15 @@ data XndrCmd
   | Describe Topic Text
   deriving stock (Eq, Show)
 
+-- | Product of all necessary inputs for xndr
+data XndrInput
+  = XndrInput
+  { _inputQueueName :: Text
+  , _xndrCmd :: XndrCmd
+  }
+
+makeFieldsNoPrefix ''XndrInput
+
 -- | Sum type of the reducer's actions
 data XndrAction
   = DoSwap Int Int
@@ -76,7 +85,7 @@ data ReducerError
 -- | The Env that pure functions pull from
 data Env
   = Env
-  { _queueFileName :: String
+  { _queueFileName :: Text
   , _queueDir      :: FilePath
   , _queueRef      :: IORef XndrQueue
   , _compFn        :: Maybe (Topic -> Topic -> Bool)
@@ -85,12 +94,12 @@ makeFieldsNoPrefix ''Env
 
 -- | The file path for the XndrQueue
 queuePath
-  :: ( HasQueueFileName env String
+  :: ( HasQueueFileName env Text
     , HasQueueDir env FilePath
     , MonadReader env m
     )
   => m FilePath
-queuePath = (<>) <$> view queueDir <*> view queueFileName
+queuePath = mappend <$> view queueDir <*> (unpack <$> view queueFileName)
 
 -- | App Monad for Xndr
 type XndrM = ReaderT Env IO
@@ -100,14 +109,14 @@ type XndrM = ReaderT Env IO
 -- Main function
 
 -- | Performs the commands given in XndrCmd!
-xndr :: XndrCmd -> IO ()
-xndr cmd = do
+xndr :: XndrInput -> IO ()
+xndr xndrInput = do
   -- Create the Environmment
   homeDir <- fromMaybe "/tmp" <$> lookupEnv "HOME"
   _queueRef <- newIORef mempty
   let
     _queueDir = homeDir <> "/.xndr/"
-    _queueFileName = "default"
+    _queueFileName = xndrInput ^. inputQueueName
     _compFn = Nothing
 
   -- Run in the Environment
@@ -115,7 +124,7 @@ xndr cmd = do
     -- Read the `XndrQueue` from the File System
     readQueueFile
     -- Handle the `XndrCmd`
-    handleCmd cmd
+    handleCmd $ xndrInput ^. xndrCmd
 
 
 --------------------------------------------------------------------------------

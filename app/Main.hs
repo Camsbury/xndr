@@ -23,7 +23,11 @@ import Prelude
 --------------------------------------------------------------------------------
 import Options.Applicative
 --------------------------------------------------------------------------------
-import Xndr (xndr, XndrCmd(..))
+import Xndr
+  ( xndr
+  , XndrCmd(..)
+  , XndrInput(..)
+  )
 --------------------------------------------------------------------------------
 
 
@@ -34,7 +38,7 @@ import Xndr (xndr, XndrCmd(..))
 main :: IO ()
 main = xndr =<< customExecParser p opts
   where
-    opts = info (parseXndrCmd <**> helper) desc
+    opts = info (parseXndrInput <**> helper) desc
     p    = prefs showHelpOnEmpty
     desc = fullDesc
          <> progDesc "A priority queue for all of the tasks \
@@ -45,6 +49,22 @@ main = xndr =<< customExecParser p opts
 
 --------------------------------------------------------------------------------
 -- Parser
+
+-- | Parser for `XndrInput`s
+parseXndrInput :: Parser XndrInput
+parseXndrInput = XndrInput <$> parseXndrQueue <*> parseXndrCmd
+
+
+-- | Parser for the xndr Queue path
+parseXndrQueue :: Parser Text
+parseXndrQueue
+  = strOption
+  ( long "queueName"
+  <> short 'q'
+  <> metavar "QUEUENAME"
+  <> value "default"
+  <> help "Read xndr queue from QUEUENAME"
+  )
 
 -- | Parser for `XndrCmd`s
 parseXndrCmd :: Parser XndrCmd

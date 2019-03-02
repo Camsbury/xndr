@@ -50,6 +50,8 @@ executable xndr
   -- other-extensions:
   hs-source-dirs:      app
   default-language:    Haskell2010
+  default-extensions:
+                     OverloadedStrings
   build-depends:       base-noprelude >=4.11
                      , classy-prelude
                      , optparse-applicative

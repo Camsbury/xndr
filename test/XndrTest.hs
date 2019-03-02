@@ -146,7 +146,7 @@ roundTripReadWrite = property $ do
     readQueueFile
     getQueue
 
-  liftIO $ removeFile (_queueDir <> _queueFileName)
+  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
 
   queue3 === XndrQueue [topic]
 
@@ -203,7 +203,7 @@ prioritizedInsert = property $ do
     handleCmd (Insert topicMiddle)
     queryTop <$> getQueue
 
-  liftIO $ removeFile (_queueDir <> _queueFileName)
+  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
 
   topTopic === Just topicHigher
 
@@ -264,7 +264,7 @@ prioritizedDelete = property $ do
     handleCmd (Delete topicHigher)
     queryTop <$> getQueue
 
-  liftIO $ removeFile (_queueDir <> _queueFileName)
+  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
 
   topTopic === Just topicMiddle
 
@@ -325,6 +325,6 @@ prioritizedPop = property $ do
     handleCmd Pop
     queryTop <$> getQueue
 
-  liftIO $ removeFile (_queueDir <> _queueFileName)
+  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
 
   topTopic === Just topicMiddle

@@ -16,5 +16,5 @@ testState = unsafePerformIO $ newMVar 0
 newTestState :: MonadIO m => m Int
 newTestState = liftIO $ modifyMVar testState (\x -> pure (succ x, x))
 
-mkTestFileName :: Int -> String
-mkTestFileName state = "testQueue" <> "." <> show state
+mkTestFileName :: Int -> Text
+mkTestFileName state = "testQueue" <> "." <> tshow state
