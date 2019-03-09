@@ -75,6 +75,11 @@ parseXndrCmd
       (pure Top)
       (progDesc "Print highest priority item in queue")
     )
+  <> command "tops"
+    ( info
+      (pure Tops)
+      (progDesc "Pop highest priority item from queue")
+    )
   <> command "pop"
     ( info
       (pure Pop)

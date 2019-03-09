@@ -35,6 +35,7 @@ import Control.Lens
   , makeFieldsNoPrefix
   , view
   , folded
+  , to
   )
 --------------------------------------------------------------------------------
 -- Types
@@ -55,6 +56,7 @@ type Topic = Text
 -- | Sum type of the commands available for xndr
 data XndrCmd
   = Top
+  | Tops
   | Pop
   | List
   | Qs
@@ -190,16 +192,42 @@ handleCmd Top
   = maybe emptyQueueMsg printTop . queryTop =<< getQueue
   where
     printTop :: Text -> XndrM ()
-    printTop x
-      = putStrLn
-      $ "\"" <> x <> "\" is the highest priority topic in the queue."
+    printTop x = do
+      fName <- view queueFileName
+      putStrLn
+        $ "\""
+        <> x
+        <> "\" is the highest priority topic in the \""
+        <> fName
+        <> "\" queue."
+
+handleCmd Tops = do
+  qDir <- view queueDir
+  contents <- lift $ listDirectory qDir
+  topContents contents
+  where
+    topContents :: [String] -> XndrM ()
+    topContents [] = putStrLn "No queues exist!"
+    topContents contents = do
+      let maxLen
+            = fromMaybe 0
+            . maximumMay
+            $ contents ^.. folded . to length
+      putStrLn "Highest priority by queue:\n"
+      lift
+        . for_ contents
+        $ \qName -> do
+          let spaceBuffer = maxLen - length qName
+          putStr $ pack qName <> ": " <> replicate spaceBuffer ' '
+          xndr $ XndrInput (pack qName) Top
+
 
 handleCmd List
   = traverse_ putStrLn . createDisplayTree . queryList =<< getQueue
 
 handleCmd Qs = do
-  qD <- view queueDir
-  contents <- lift $ listDirectory qD
+  qDir <- view queueDir
+  contents <- lift $ listDirectory qDir
   putStrLn "Available queues:\n"
   traverse_ (lift . putStrLn . pack) contents
 
