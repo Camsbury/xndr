@@ -24,7 +24,11 @@ import Control.Monad.State
 import Data.Store (Store, encode, decode)
 import Data.Vector (elemIndex)
 import System.Environment (lookupEnv)
-import System.Directory (doesFileExist, createDirectoryIfMissing)
+import System.Directory
+  ( doesFileExist
+  , createDirectoryIfMissing
+  , listDirectory
+  )
 --------------------------------------------------------------------------------
 import Control.Lens
   ( ix
@@ -53,6 +57,7 @@ data XndrCmd
   = Top
   | Pop
   | List
+  | Qs
   | Delete Topic
   | Insert Topic
   | Info Topic
@@ -191,6 +196,12 @@ handleCmd Top
 
 handleCmd List
   = traverse_ putStrLn . createDisplayTree . queryList =<< getQueue
+
+handleCmd Qs = do
+  qD <- view queueDir
+  contents <- lift $ listDirectory qD
+  putStrLn "Available queues:\n"
+  traverse_ (lift . putStrLn . pack) contents
 
 handleCmd Pop = do
   queue <- getQueue

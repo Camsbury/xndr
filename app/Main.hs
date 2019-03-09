@@ -85,6 +85,11 @@ parseXndrCmd
       (pure List)
       (progDesc "List the items in the queue")
     )
+  <> command "qs"
+    ( info
+      (pure Qs)
+      (progDesc "List the queues available")
+    )
   <> command "delete"
     ( info
       parseDelete
