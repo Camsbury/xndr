@@ -9,6 +9,7 @@ in
         librarySystemDepends = with pkgs; [
           cabal-install
           haskellPackages.ghcid
+          sourceHighlight
         ];
       });
     in
