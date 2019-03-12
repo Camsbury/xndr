@@ -1,3 +1,4 @@
+{- HLINT ignore "Reduce duplication" -}
 --------------------------------------------------------------------------------
 module XndrTest where
 --------------------------------------------------------------------------------
@@ -9,7 +10,6 @@ import Xndr
 import Control.Lens.Operators
 --------------------------------------------------------------------------------
 import Control.Lens (ix, non)
-import System.Directory (removeFile)
 --------------------------------------------------------------------------------
 import qualified Hedgehog.Gen   as Gen
 import qualified Hedgehog.Range as Range
@@ -20,311 +20,220 @@ main
   = defaultMain
   . localOption (HedgehogTestLimit $ Just 5)
   $ testGroup "xndr commands"
-    [ test_xndrTop
-    , test_xndrTop
-    , test_xndrInsert
-    , test_readWrite
-    , test_prioritizeInsert
-    , test_prioritizeDelete
-    , test_prioritizePop
-    ]
-
---------------------------------------------------------------------------------
--- Top
-
-test_xndrTop :: TestTree
-test_xndrTop
-  = testGroup "top command"
-    [ testProperty "returns nothing with an empty queue"
-        emptyQueueTopResponse
-    , testProperty "returns the only item in a one-item queue"
-        singletonQueueTopResponse
-    , testProperty "returns the top item in a two-item queue"
-        twoMemberQueueTopResponse
-    ]
-
-emptyQueueTopResponse :: Property
-emptyQueueTopResponse
-  = property
-  $ queryTop mempty === Nothing
-
-singletonQueueTopResponse :: Property
-singletonQueueTopResponse = property $ do
-  topic <- Gen.sample $ Gen.text (Range.linear 0 10) Gen.ascii
-  queryTop (XndrQueue [topic])
-    === Just topic
-
-twoMemberQueueTopResponse :: Property
-twoMemberQueueTopResponse = property $ do
-  topicLower
-    <- Gen.sample
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  topicHigher
-    <- Gen.sample
-    . Gen.filter (/= topicLower)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  queryTop (XndrQueue [topicHigher, topicLower]) === Just topicHigher
-
-
---------------------------------------------------------------------------------
---List
-
-test_xndrList :: TestTree
-test_xndrList
-  = testGroup "list command"
-    [testProperty "returns the same queue as was given" listResponse]
-
-listResponse :: Property
-listResponse = property $ do
-  topicList
-    <- Gen.sample
-    . Gen.list (Range.linear 0 10)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-
-  queryList (XndrQueue $ fromList topicList) === topicList
-
-
---------------------------------------------------------------------------------
--- Insert
-
-test_xndrInsert :: TestTree
-test_xndrInsert
-  = testGroup "insert command"
-    [ testProperty "sucessfully puts something in the queue"
-        successfulSingleInsert
-    ]
-
-successfulSingleInsert :: Property
-successfulSingleInsert = property $ do
-  topic <- Gen.sample $ Gen.text (Range.linear 0 10) Gen.ascii
-  let
-    queue = unsafeEither $ reduceXndr (DoAppend topic) mempty
-  queryTop queue
-    === Just topic
-
-
---------------------------------------------------------------------------------
--- Read and Write
-
-test_readWrite :: TestTree
-test_readWrite
-  = testGroup "readQueueFile and writeQueueFile"
-    [ testProperty "round trips through a write and read" roundTripReadWrite
-    ]
-
-roundTripReadWrite :: Property
-roundTripReadWrite = property $ do
-  testState <- newTestState
-  let
-    _queueFileName
-      = mkTestFileName testState
-    _queueDir
-      = "/tmp/"
-    _compFn
-      = Nothing
-  _queueRef <- newIORef mempty
-
-  -- Starts off empty
-  queue1 <- liftIO . (`runReaderT` Env{..}) $ do
-    readQueueFile
-
-    getQueue
-
-  queue1 === mempty
-
-  -- Insert a value
-  topic <- Gen.sample $ Gen.text (Range.linear 0 10) Gen.ascii
-  liftIO . (`runReaderT` Env{..}) $ do
-    modifyQueue . fmap unsafeEither $ reduceXndr (DoAppend topic)
-    writeQueueFile
-
-  -- Has inserted value
-  queue3 <- liftIO . (`runReaderT` Env{..}) $ do
-    readQueueFile
-    getQueue
-
-  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
-
-  queue3 === XndrQueue [topic]
-
-
---------------------------------------------------------------------------------
--- Insert Prioritization
-
-test_prioritizeInsert :: TestTree
-test_prioritizeInsert
-  = testGroup "Insert"
-    [ testProperty "should prioritize properly" prioritizedInsert
-    ]
-
-prioritizedInsert :: Property
-prioritizedInsert = property $ do
-  testState <- newTestState
-
-  topicLower
-    <- Gen.sample
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  topicMiddle
-    <- Gen.sample
-    . Gen.filter (/= topicLower)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  topicHigher
-    <- Gen.sample
-    . Gen.filter (\x -> x /= topicLower && x /= topicMiddle)
-    . Gen.filter (/= topicLower)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-
-  let
-    _queueFileName
-      = mkTestFileName testState
-    _queueDir
-      = "/tmp/"
-    compFn nVal pVal
-      | nVal == topicHigher && pVal == topicLower = True
-      | nVal == topicHigher && pVal == topicMiddle = True
-      | nVal == topicMiddle && pVal == topicHigher = False
-      | nVal == topicMiddle && pVal == topicLower = True
-      | nVal == topicLower && pVal == topicHigher = False
-      | nVal == topicLower && pVal == topicMiddle = False
-      | otherwise = False
-    _compFn = Just compFn
-  _queueRef <- newIORef mempty
-
-  topTopic <- liftIO . (`runReaderT` Env{..}) $ do
-    queue <- getQueue
-    handleCmd (Insert topicLower)
-    handleCmd (Insert topicHigher)
-    handleCmd (Insert topicMiddle)
-    queryTop <$> getQueue
-
-  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
-
-  topTopic === Just topicHigher
-
-
---------------------------------------------------------------------------------
--- Delete Prioritization
-
-test_prioritizeDelete :: TestTree
-test_prioritizeDelete
-  = testGroup "Delete"
-  [ testProperty "should prioritize properly" prioritizedDelete
+  [ test_xndrQueueCreate
+  , test_xndrQueueDelete
+  , test_xndrQueueList
+  , test_xndrQueueDesc
   ]
 
-prioritizedDelete :: Property
-prioritizedDelete = property $ do
-  testState <- newTestState
 
-  topicLower
-    <- Gen.sample
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  topicMiddle
-    <- Gen.sample
-    . Gen.filter (/= topicLower)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  topicHigher
-    <- Gen.sample
-    . Gen.filter (/= topicMiddle)
-    . Gen.filter (/= topicLower)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
+--------------------------------------------------------------------------------
 
-  let
-    _queueFileName
-      = mkTestFileName testState
-    _queueDir
-      = "/tmp/"
-    compFn nVal pVal
-      | nVal == topicHigher && pVal == topicLower = True
-      | nVal == topicHigher && pVal == topicMiddle = True
-      | nVal == topicMiddle && pVal == topicHigher = False
-      | nVal == topicMiddle && pVal == topicLower = True
-      | nVal == topicLower  && pVal == topicHigher = False
-      | nVal == topicLower  && pVal == topicMiddle = False
-      | otherwise = False
-    _compFn = Just compFn
-  _queueRef
-    <- newIORef
-    $ XndrQueue
-    [ topicHigher
-    , topicMiddle
-    , topicLower
+test_xndrQueueCreate :: TestTree
+test_xndrQueueCreate
+  = testGroup "QueueCreate command"
+    [ testProperty "gives a valid response"
+        successfulQueueCreate
+    , testProperty "successfully creates with no description"
+        successfulUndescribedQueueCreate
+    , testProperty "successfully creates with a description"
+        successfulDescribedQueueCreate
+    , testProperty "lets the user know about a conflict"
+        conflictQueueCreate
     ]
 
-  topTopic <- liftIO . (`runReaderT` Env{..}) $ do
-    queue <- getQueue
-    handleCmd (Delete topicHigher)
-    queryTop <$> getQueue
+successfulQueueCreate :: Property
+successfulQueueCreate = property $ do
+  (createdQueueResponse, queueName) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    createQueueResponse
+      <- handleCmd (QueueCreate queueName Nothing)
+    pure (createQueueResponse, queueName)
 
-  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
+  createdQueueResponse === QueueCreateSuccess queueName
 
-  topTopic === Just topicMiddle
+successfulUndescribedQueueCreate :: Property
+successfulUndescribedQueueCreate = property $ do
+  (queueInfoResponse, queueName) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueCreate queueName Nothing)
+    queueInfoResponse <- handleCmd (QueueInfo queueName)
+    pure (queueInfoResponse, queueName)
+
+  queueInfoResponse === QueueInfoEmpty queueName
+
+successfulDescribedQueueCreate :: Property
+successfulDescribedQueueCreate = property $ do
+  (queueInfoResponse, queueName, queueDesc) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    queueDesc
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueCreate queueName $ Just queueDesc)
+    queueInfoResponse <- handleCmd (QueueInfo queueName)
+    pure (queueInfoResponse, queueName, queueDesc)
+
+  queueInfoResponse === QueueInfoSuccess queueName queueDesc
+
+conflictQueueCreate :: Property
+conflictQueueCreate = property $ do
+  (createdQueueResponse, queueName) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueCreate queueName Nothing)
+    createQueueResponse
+      <- handleCmd (QueueCreate queueName Nothing)
+    pure (createQueueResponse, queueName)
+
+  createdQueueResponse === QueueCreateExists queueName
 
 
 --------------------------------------------------------------------------------
--- Pop Prioritization
 
-test_prioritizePop :: TestTree
-test_prioritizePop
-  = testGroup "Pop"
-  [ testProperty "should prioritize properly" prioritizedPop
-  ]
-
-prioritizedPop :: Property
-prioritizedPop = property $ do
-  testState <- newTestState
-
-  topicLower
-    <- Gen.sample
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  topicMiddle
-    <- Gen.sample
-    . Gen.filter (/= topicLower)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-  topicHigher
-    <- Gen.sample
-    . Gen.filter (/= topicMiddle)
-    . Gen.filter (/= topicLower)
-    . Gen.text (Range.linear 0 10)
-    $ Gen.ascii
-
-  let
-    _queueFileName
-      = mkTestFileName testState
-    _queueDir
-      = "/tmp/"
-    compFn nVal pVal
-      | nVal == topicHigher && pVal == topicLower = True
-      | nVal == topicHigher && pVal == topicMiddle = True
-      | nVal == topicMiddle && pVal == topicHigher = False
-      | nVal == topicMiddle && pVal == topicLower = True
-      | nVal == topicLower  && pVal == topicHigher = False
-      | nVal == topicLower  && pVal == topicMiddle = False
-      | otherwise = False
-    _compFn = Just compFn
-  _queueRef
-    <- newIORef
-    $ XndrQueue
-    [ topicHigher
-    , topicMiddle
-    , topicLower
+test_xndrQueueDelete :: TestTree
+test_xndrQueueDelete
+  = testGroup "QueueDelete"
+    [ testProperty "successfully deletes a queue"
+        successfulQueueDelete
+    , testProperty "does nothing if queue doesn't exist"
+        emptyQueueDelete
     ]
 
-  topTopic <- liftIO . (`runReaderT` Env{..}) $ do
-    queue <- getQueue
-    handleCmd Pop
-    queryTop <$> getQueue
+successfulQueueDelete :: Property
+successfulQueueDelete = property $ do
+  (deleteQueueResponse, queueName) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueCreate queueName Nothing)
+    (, queueName) <$> handleCmd (QueueDelete queueName)
+  deleteQueueResponse === QueueDeleteSuccess queueName
 
-  liftIO $ removeFile (_queueDir <> unpack _queueFileName)
+emptyQueueDelete :: Property
+emptyQueueDelete = property $ do
+  listQueuesResponse <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueDelete queueName)
+    handleCmd QueueList
+  listQueuesResponse === QueueListResponse []
 
-  topTopic === Just topicMiddle
+
+--------------------------------------------------------------------------------
+
+test_xndrQueueList :: TestTree
+test_xndrQueueList
+  = testGroup "QueueList"
+  [ testProperty "successfully lists a created queue"
+      singleQueueQueueList
+  , testProperty "returns an empty list when empty"
+      noQueuesQueueList
+  , testProperty "returns all queues"
+      multiQueueQueueList
+  ]
+
+singleQueueQueueList :: Property
+singleQueueQueueList = property $ do
+  (listQueuesResponse, queueName) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueCreate queueName Nothing)
+    (, queueName) <$> handleCmd QueueList
+  listQueuesResponse === QueueListResponse [queueName]
+
+noQueuesQueueList :: Property
+noQueuesQueueList = property $ do
+  listQueuesResponse <- lift . withTestDatabase $ handleCmd QueueList
+  listQueuesResponse === QueueListResponse []
+
+multiQueueQueueList :: Property
+multiQueueQueueList = property $ do
+  (listQueuesResponse, queueNames) <- lift . withTestDatabase $ do
+    queueNames
+      <- Gen.sample
+      . genUniqueList (Range.linear 0 10)
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    traverse_ (\q -> handleCmd (QueueCreate q Nothing)) queueNames
+    (,queueNames) <$> handleCmd QueueList
+  compContents listQueuesResponse queueNames
+  where
+    compContents (QueueListResponse responseNames) trueNames =
+      sort responseNames === sort trueNames
+    compContents _ _ = failure
+
+
+--------------------------------------------------------------------------------
+
+test_xndrQueueDesc :: TestTree
+test_xndrQueueDesc
+  = testGroup "QueueDesc"
+  [ testProperty "returns the correct response"
+      successfulQueueDesc
+  , testProperty "returns the correct response"
+      infoQueueDesc
+  , testProperty "says when the queue doesn't exist"
+      nonexistentQueueDesc
+  ]
+
+successfulQueueDesc :: Property
+successfulQueueDesc = property $ do
+  (descResponse, queueName) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    queueDesc
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueCreate queueName Nothing)
+    (, queueName) <$> handleCmd (QueueDesc   queueName queueDesc)
+  descResponse === QueueDescSuccess queueName
+
+infoQueueDesc :: Property
+infoQueueDesc = property $ do
+  (infoResponse, queueName, queueDesc) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    queueDesc
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    handleCmd (QueueCreate queueName Nothing)
+    handleCmd (QueueDesc   queueName queueDesc)
+    (, queueName, queueDesc) <$> handleCmd (QueueInfo   queueName)
+  infoResponse === QueueInfoSuccess queueName queueDesc
+
+nonexistentQueueDesc :: Property
+nonexistentQueueDesc = property $ do
+  (descResponse, queueName) <- lift . withTestDatabase $ do
+    queueName
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    queueDesc
+      <- Gen.sample
+      . Gen.text (Range.linear 0 10)
+      $ Gen.ascii
+    (, queueName) <$> handleCmd (QueueDesc queueName queueDesc)
+  descResponse === QueueDescMissing queueName

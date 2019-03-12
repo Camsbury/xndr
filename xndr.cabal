@@ -39,9 +39,13 @@ library
   build-depends:       base-noprelude >=4.11
                      , classy-prelude
                      , directory
+                     , HDBC
+                     , HDBC-sqlite3
+                     , hedgehog
                      , lens
                      , mtl
                      , store
+                     , uuid
                      , vector
 
 executable xndr
@@ -84,6 +88,8 @@ test-suite xndr-tests
                      , classy-prelude
                      , xndr
                      , directory
+                     , HDBC
+                     , HDBC-sqlite3
                      , hedgehog
                      , lens
                      , mtl

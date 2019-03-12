@@ -19,17 +19,25 @@ Should eventually work nicely as a nix package you can just grab off the interwe
 - `cabal build`
 - run the executable that is produced! (more granular details soon)
 
+If it works
+- run `nix-build` (will give details for `nix-env` and `nixos-rebuild switch`)
+
 ## API
 Currently supported commands include:
 
-- `xndr top` - get the top priority item
-- `xndr pop` - pop the top priority item off of the queue
-- `xndr list` - list the contents of the queue
-- `xndr insert TOPIC`- insert the topic into the queue
-- `xndr delete TOPIC`- delete the topic from the queue
+- `xndr q ls` - list all queues
+- `xndr q add QUEUE [DESCRIPTION]` - create a queue
+- `xndr q rm QUEUE` - delete the queue
+- `xndr q desc QUEUE DESCRIPTION` - append a description for the queue
+- `xndr q info QUEUE` - get the description list for the queue
+- `xndr q top [QUEUE]` - get the top priority item for one or all queues
+- `xndr q pop QUEUE` - pop the top priority item off of the queue
+- `xndr q view QUEUE` - list the contents of the queue
 
-Soon to support:
+- `xndr t add QUEUE TOPIC [DESCRIPTION]` - insert a topic into the queue
+- `xndr t rm TOPIC [QUEUE]` - delete the topic from one or all queues
+- `xndr t desc TOPIC DESCRIPTION` - append a description for the topic
+- `xndr t info TOPIC` - get the description list for the topic
 
-- `xndr describe TOPIC DESCRIPTION` append a description for the topic
-- `xndr info TOPIC`- get the description list for the topic
-- `xndr find TOPIC`- fuzzy find a topic in the queue
+To be supported:
+- `xndr t find SEARCH_STRING [QUEUE]` - fuzzy find a topic (optionally in the queue)

@@ -26,7 +26,6 @@ import Options.Applicative
 import Xndr
   ( xndr
   , XndrCmd(..)
-  , XndrInput(..)
   )
 --------------------------------------------------------------------------------
 
@@ -38,106 +37,80 @@ import Xndr
 main :: IO ()
 main = xndr =<< customExecParser p opts
   where
-    opts = info (parseXndrInput <**> helper) desc
+    opts = info (parseXndrCmd <**> helper) desc
     p    = prefs showHelpOnEmpty
     desc = fullDesc
          <> progDesc "A priority queue for all of the tasks \
-                    \ you would like to keep track of in a \
-                    \ priority queue. Will expand to include \
-                    \ concrete use cases soon."
+                    \you would like to keep track of by priority. \
+                    \Will expand to include concrete use cases soon."
          <> header "Xndr - A priority queue for humans"
 
 --------------------------------------------------------------------------------
 -- Parser
 
--- | Parser for `XndrInput`s
-parseXndrInput :: Parser XndrInput
-parseXndrInput = XndrInput <$> parseXndrQueue <*> parseXndrCmd
-
-
--- | Parser for the xndr Queue path
-parseXndrQueue :: Parser Text
-parseXndrQueue
-  = strOption
-  ( long "queueName"
-  <> short 'q'
-  <> metavar "QUEUENAME"
-  <> value "default"
-  <> help "Read xndr queue from QUEUENAME"
-  )
-
 -- | Parser for `XndrCmd`s
 parseXndrCmd :: Parser XndrCmd
 parseXndrCmd
   = hsubparser
-  ( command "top"
+  ( command "q"
     ( info
-      (pure Top)
-      (progDesc "Print highest priority item in queue")
-    )
-  <> command "tops"
-    ( info
-      (pure Tops)
-      (progDesc "Pop highest priority item from queue")
-    )
-  <> command "pop"
-    ( info
-      (pure Pop)
-      (progDesc "Pop highest priority item from queue")
-    )
-  <> command "list"
-    ( info
-      (pure List)
-      (progDesc "List the items in the queue")
-    )
-  <> command "qs"
-    ( info
-      (pure Qs)
-      (progDesc "List the queues available")
-    )
-  <> command "delete"
-    ( info
-      parseDelete
-      (progDesc "Delete a topic from the queue")
-    )
-  <> command "insert"
-    ( info
-      parseInsert
-      (progDesc "Insert a topic into the queue")
-    )
-  <> command "info"
-    ( info
-      parseInfo
-      (progDesc "Get the description of a topic")
-    )
-  <> command "describe"
-    ( info
-      parseDescribe
-      (progDesc "Write the description of a topic")
+      parseQueueCommand
+      (progDesc "Actions to be taken on queues")
     )
   )
 
--- | Parser for the `Delete` command
-parseDelete :: Parser XndrCmd
-parseDelete
-  =   Delete
-  <$> argument str (metavar "TOPIC")
+parseQueueCommand :: Parser XndrCmd
+parseQueueCommand
+  = hsubparser
+  ( command "ls"
+    ( info
+      (pure QueueList)
+      (progDesc "List all priority queues")
+    )
+  <> command "add"
+    ( info
+      parseQueueCreate
+      (progDesc "Make a priority queue")
+    )
+  <> command "rm"
+    ( info
+      parseQueueDelete
+      (progDesc "Delete a priority queue")
+    )
+  <> command "info"
+    ( info
+      parseQueueInfo
+      (progDesc "Get info on a priority queue")
+    )
+  <> command "desc"
+    ( info
+      parseQueueDesc
+      (progDesc "Provide description for a priority queue")
+    )
+  )
 
--- | Parser for the `Insert` command
-parseInsert :: Parser XndrCmd
-parseInsert
-  =   Insert
-  <$> argument str (metavar "TOPIC")
+-- | Parser for the `QueueCreate` command
+parseQueueCreate :: Parser XndrCmd
+parseQueueCreate
+  =   QueueCreate
+  <$> argument str (metavar "QUEUE")
+  <*> optional (argument str (metavar "DESCRIPTION"))
 
--- | Parser for the `Info` command
-parseInfo :: Parser XndrCmd
-parseInfo
-  =   Info
-  <$> argument str (metavar "TOPIC")
+-- | Parser for the `QueueDelete` command
+parseQueueDelete :: Parser XndrCmd
+parseQueueDelete
+  =   QueueDelete
+  <$> argument str (metavar "QUEUE")
 
--- | Parser for the `Describe` command
-parseDescribe :: Parser XndrCmd
-parseDescribe
-  =   Describe
-  <$> argument str (metavar "TOPIC")
+-- | Parser for the `QueueInfo` command
+parseQueueInfo :: Parser XndrCmd
+parseQueueInfo
+  =   QueueInfo
+  <$> argument str (metavar "QUEUE")
+
+-- | Parser for the `QueueInfo` command
+parseQueueDesc :: Parser XndrCmd
+parseQueueDesc
+  =   QueueDesc
+  <$> argument str (metavar "QUEUE")
   <*> argument str (metavar "DESCRIPTION")
